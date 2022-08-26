@@ -36,7 +36,7 @@ def fio(message):
         schedule.clear(message.chat.id)
     else:
         schedule.every(25).minutes.do(get_sending_function(message.chat.id)).tag(message.chat.id)
-        schedule.every(29).seconds.do(get_sending_notification(message.chat.id)).tag(message.chat.id)
+        schedule.every(29).minutes.do(get_sending_notification(message.chat.id)).tag(message.chat.id)
     if text == "🍽 Обед" and len(schedule.get_jobs(message.chat.id)) >= 1:
         schedule.clear(message.chat.id)
         bot.send_message(message.chat.id, "Оу, у тебя обед? Приятного аппетита! Я обязательно тебе напомню, что пора за работу")
