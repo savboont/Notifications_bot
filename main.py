@@ -5,7 +5,7 @@ import schedule
 from threading import Thread
 import datetime
 
-bot = telebot.TeleBot('TOKEN')
+bot = telebot.TeleBot('TOKENTOKEN')
 schedule1 = schedule.Scheduler()
 
 
