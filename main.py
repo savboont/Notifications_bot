@@ -5,7 +5,7 @@ import schedule
 from threading import Thread
 import datetime
 
-bot = telebot.TeleBot('TOKEN')
+bot = telebot.TeleBot('5722063207:AAHw_D3WTTZpymoI9v84xQ_1vzDxxsFPazw')
 schedule1 = schedule.Scheduler()
 
 
@@ -51,6 +51,9 @@ def fio(message):
     text = message.text
     if text == "💻 Новое обращение":
         bot.send_message(message.chat.id, text=new_appeal)
+        schedule.clear(message.chat.id)
+        schedule.every(25).minutes.do(get_sending_function(message.chat.id)).tag(message.chat.id)
+        schedule.every(29).minutes.do(get_sending_notification(message.chat.id)).tag(message.chat.id)
     if text == "✅ Обращение завершено" and len(schedule.get_jobs(message.chat.id)) >= 1:
         schedule.clear(message.chat.id)
         bot.send_message(message.chat.id, text=end_appeal)
@@ -73,18 +76,16 @@ def fio(message):
                 start_times.append(start_time)
             for i in range(len(start_times)):
                 schedule1.every().day.at(f"{start_times[i].time()}").do(send_start_time(message.chat.id, "Перерыв")).tag(message.chat.id)
-    elif text == "🍽 Обед 30 мин" and len(schedule.get_jobs(message.chat.id)) >= 1:
+    elif text == "🍽 Обед 30 мин":
         schedule.clear(message.chat.id)
         bot.send_message(message.chat.id, dinner_or_pause)
         schedule.every(29).minutes.do(get_sending_dinner(message.chat.id)).tag(message.chat.id)
-    elif text == "🏖 Перерыв 15 мин" and len(schedule.get_jobs(message.chat.id)) >= 1:
+    elif text == "🏖 Перерыв 15 мин":
         schedule.clear(message.chat.id)
         bot.send_message(message.chat.id, dinner_or_pause)
         schedule.every(14).minutes.do(get_sending_dinner(message.chat.id)).tag(message.chat.id)
-    else:
-        schedule.clear(message.chat.id)
-        schedule.every(25).minutes.do(get_sending_function(message.chat.id)).tag(message.chat.id)
-        schedule.every(29).minutes.do(get_sending_notification(message.chat.id)).tag(message.chat.id)
+
+
 
     print(schedule.get_jobs())
     print(schedule1.get_jobs())
