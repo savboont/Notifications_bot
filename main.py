@@ -7,6 +7,16 @@ import datetime
 
 bot = telebot.TeleBot('TOKEN')
 schedule1 = schedule.Scheduler()
+schedule2 = schedule.Scheduler()
+
+counter_solved = {}
+counter_adjacent = {}
+counter_other = {}
+
+shifts = ['Your shifts were', 'Closest upcoming', 'Ближайшие смены:', 'Твои смены измен']
+pauses = ['Смена', 'Shift']
+
+delta = datetime.timedelta(seconds=20)
 
 
 @bot.message_handler(commands=['start'])
@@ -15,8 +25,10 @@ def start(message):
     btn1 = types.KeyboardButton("💻 Новое обращение")
     btn2 = types.KeyboardButton("🍽 Обед 30 мин")
     btn3 = types.KeyboardButton("🏖 Перерыв 15 мин")
-    btn4 = types.KeyboardButton("✅ Обращение завершено")
-    markup.add(btn1, btn2, btn3, btn4)
+    btn4 = types.KeyboardButton("✅ Решено")
+    btn5 = types.KeyboardButton("✅ Смежники")
+    btn6 = types.KeyboardButton("✅ Остальные")
+    markup.add(btn1, btn2, btn3, btn4, btn5, btn6)
     bot.send_message(message.chat.id, text="Привет, {0.first_name}! Я бот для твоей работы. Сейчас я расскажу тебе о "
                                            "своих возможностях".format(message.from_user), reply_markup=markup)
     bot.send_message(message.chat.id, text="Накануне рабочего дня ты можешь переслать мне из рабочего бота сообщение "
@@ -35,59 +47,120 @@ def start(message):
                                            "'🏖 Перерыв 15 мин' и я  напомню за 1 минуту до конца перерыва")
 
 
-
 def schedule_checker():
     while True:
         schedule.run_pending()
         schedule1.run_pending()
+        schedule2.run_pending()
         time.sleep(1)
 
 
 @bot.message_handler(func=lambda message: True)
 def fio(message):
+    global counter_solved, counter_other, counter_adjacent
     dinner_or_pause = "Работа работой, а отдых по расписанию! Я тебе напомню, когда пора взяться за работу."
     new_appeal = "Начинаю обратный отсчет! Когда время будет на исходе ты получишь уведомление."
     end_appeal = "Обращение завершено! Если получишь новое обращение - просто нажми на соответствующую кнопку"
     text = message.text
     if text == "💻 Новое обращение":
         bot.send_message(message.chat.id, text=new_appeal)
-    if text == "✅ Обращение завершено" and len(schedule.get_jobs(message.chat.id)) >= 1:
+        schedule.clear(message.chat.id)
+        schedule.every(5).minutes.do(get_sending_excellent(message.chat.id)).tag(message.chat.id)
+        schedule.every(7).minutes.do(get_sending_good(message.chat.id)).tag(message.chat.id)
+        schedule.every(25).minutes.do(get_sending_function(message.chat.id)).tag(message.chat.id)
+        schedule.every(29).minutes.do(get_sending_notification(message.chat.id)).tag(message.chat.id)
+    if text == "✅ Решено" and len(schedule.get_jobs(message.chat.id)) >= 1:
+        counter_solved[message.chat.id] = counter_solved.get(message.chat.id, 0) + 1
         schedule.clear(message.chat.id)
         bot.send_message(message.chat.id, text=end_appeal)
-    elif text == "✅ Обращение завершено" and len(schedule.get_jobs(message.chat.id)) == 0:
+    elif text == "✅ Решено" and len(schedule.get_jobs(message.chat.id)) == 0:
+        counter_solved[message.chat.id] = counter_solved.get(message.chat.id, 0) + 1
         schedule.clear(message.chat.id)
-    elif len(text) > 21:
+    elif text == "✅ Смежники" and len(schedule.get_jobs(message.chat.id)) >= 1:
+        counter_adjacent[message.chat.id] = counter_adjacent.get(message.chat.id, 0) + 1
+        schedule.clear(message.chat.id)
+        bot.send_message(message.chat.id, text=end_appeal)
+    elif text == "✅ Смежники" and len(schedule.get_jobs(message.chat.id)) == 0:
+        counter_adjacent[message.chat.id] = counter_adjacent.get(message.chat.id, 0) + 1
+        schedule.clear(message.chat.id)
+    elif text == "✅ Остальные" and len(schedule.get_jobs(message.chat.id)) >= 1:
+        counter_other[message.chat.id] = counter_other.get(message.chat.id, 0) + 1
+        schedule.clear(message.chat.id)
+        bot.send_message(message.chat.id, text=end_appeal)
+    elif text == "✅ Остальные" and len(schedule.get_jobs(message.chat.id)) == 0:
+        counter_other[message.chat.id] = counter_other.get(message.chat.id, 0) + 1
+        schedule.clear(message.chat.id)
+    elif text[:16] in shifts:
         f_str = text.split('\n')
-        if f_str[0].strip() == "Ближайшие смены:":
-            bot.send_message(message.chat.id, text='Понял принял')
+        bot.send_message(message.chat.id, text='Понял принял')
+        try:
             work_time = f_str[1][-14:len(f_str[1])]
             start_time, end_time = time_extraction(work_time)
-            schedule1.every().day.at(f"{start_time.time()}").do(send_start_time(message.chat.id, "Рабочий день начнется")).tag(message.chat.id)
-            schedule1.every().day.at(f"{end_time.time()}").do(send_start_time(message.chat.id, "Рабочий день закончится")).tag(message.chat.id)
-        elif f_str[0][:5] == "Смена":
-            bot.send_message(message.chat.id, text='Понял принял')
-            start_times = []
-            for i in range(1, len(f_str)):
+            schedule2.clear(message.chat.id)
+            schedule2.every().day.at(f"{start_time.time()}").do(
+                send_start_time(message.chat.id, "Рабочий день начнется")).tag(message.chat.id)
+            schedule2.every().day.at(f"{end_time.time()}").do(
+                send_start_time(message.chat.id, "Рабочий день закончится")).tag(message.chat.id)
+            schedule2.every().day.at(f"{(end_time + delta).time()}").do(ask_about_endday(message.chat.id)).tag(message.chat.id)
+        except:
+            work_time = f_str[2][-14:len(f_str[2])]
+            start_time, end_time = time_extraction(work_time)
+            schedule2.clear(message.chat.id)
+            schedule2.every().day.at(f"{start_time.time()}").do(
+                send_start_time(message.chat.id, "Рабочий день начнется")).tag(message.chat.id)
+            schedule2.every().day.at(f"{end_time.time()}").do(
+                send_start_time(message.chat.id, "Рабочий день закончится")).tag(message.chat.id)
+            schedule2.every().day.at(f"{(end_time + delta).time()}").do(ask_about_endday(message.chat.id)).tag(message.chat.id)
+    elif text[:5] in pauses:
+        bot.send_message(message.chat.id, text='Понял принял')
+        start_times = []
+        f_str = text.split('\n')
+        for i in range(1, len(f_str)):
+            try:
                 pause_time = f_str[i][-14:len(f_str[i])]
                 start_time, _ = time_extraction(pause_time)
                 start_times.append(start_time)
-            for i in range(len(start_times)):
-                schedule1.every().day.at(f"{start_times[i].time()}").do(send_start_time(message.chat.id, "Перерыв")).tag(message.chat.id)
-    elif text == "🍽 Обед 30 мин" and len(schedule.get_jobs(message.chat.id)) >= 1:
+                schedule1.clear(message.chat.id)
+            except:
+                continue
+        for i in range(len(start_times)):
+            schedule1.every().day.at(f"{start_times[i].time()}").do(send_start_time(message.chat.id, "Перерыв")).tag(
+                message.chat.id)
+    elif text == "🍽 Обед 30 мин":
         schedule.clear(message.chat.id)
         bot.send_message(message.chat.id, dinner_or_pause)
         schedule.every(29).minutes.do(get_sending_dinner(message.chat.id)).tag(message.chat.id)
-    elif text == "🏖 Перерыв 15 мин" and len(schedule.get_jobs(message.chat.id)) >= 1:
+    elif text == "🏖 Перерыв 15 мин":
         schedule.clear(message.chat.id)
         bot.send_message(message.chat.id, dinner_or_pause)
         schedule.every(14).minutes.do(get_sending_dinner(message.chat.id)).tag(message.chat.id)
-    else:
-        schedule.clear(message.chat.id)
-        schedule.every(25).minutes.do(get_sending_function(message.chat.id)).tag(message.chat.id)
-        schedule.every(29).minutes.do(get_sending_notification(message.chat.id)).tag(message.chat.id)
+    if not schedule.get_jobs() and not schedule1.get_jobs() and not schedule2.get_jobs() and text.lower() == "+":
+        schedule2.every(1).seconds.do(get_day_statistics(message.chat.id)).tag(message.chat.id)
 
+    now = datetime.datetime.now()
+    current_time = now.strftime("%d.%m.%Y %H:%M:%S")
+    print(current_time)
     print(schedule.get_jobs())
     print(schedule1.get_jobs())
+    print(schedule2.get_jobs())
+    print()
+
+
+def get_day_statistics(chatId):
+    def send_function():
+        global counter_solved, counter_adjacent, counter_other
+        text_message = f"Сегодня было обработано:\nРешено: {counter_solved.get(chatId, 0)} обращений\n" \
+                       f"Смежники: {counter_adjacent.get(chatId, 0)} обращений\n" \
+                       f"Остальные: {counter_other.get(chatId, 0)} обращений\n" \
+                       f"Всего оплачиваемых: {counter_solved.get(chatId, 0) + counter_adjacent.get(chatId, 0)}"
+        bot.send_message(chatId, text_message)
+        counter_solved[chatId] = 0
+        counter_adjacent[chatId] = 0
+        counter_other[chatId] = 0
+        return schedule.CancelJob
+
+    return send_function
+
 
 def time_extraction(work_time):
     start_time, end_time = work_time.split(' - ')
@@ -105,6 +178,7 @@ def send_start_time(chatId, type_notification):
     def send_function():
         bot.send_message(chatId, f"{type_notification} через 5 минут!")
         return schedule.CancelJob
+
     return send_function
 
 
@@ -112,6 +186,7 @@ def get_sending_function(chatId):
     def send_function():
         bot.send_message(chatId, "Осталось 5 минут! Скоро обращение слетит!")
         return schedule.CancelJob
+
     return send_function
 
 
@@ -119,12 +194,39 @@ def get_sending_notification(chatId):
     def send_function():
         bot.send_message(chatId, "Осталась 1 минута! Приготовься ловить!")
         return schedule.CancelJob
+
     return send_function
 
 
 def get_sending_dinner(chatId):
     def send_function():
         bot.send_message(chatId, "Осталась 1 минута! Приготовься к работе!")
+        return schedule.CancelJob
+
+    return send_function
+
+
+def get_sending_excellent(chatId):
+    def send_function():
+        bot.send_message(chatId, "Отличное время для решения тикета закончилось")
+        return schedule.CancelJob
+
+    return send_function
+
+
+def get_sending_good(chatId):
+    def send_function():
+        bot.send_message(chatId, "Отличное время для решения тикета закончилось")
+        return schedule.CancelJob
+
+    return send_function
+
+
+def ask_about_endday(chatId):
+    def send_function():
+        bot.send_message(chatId, "Рабочий день закончился! Когда закончишь обращение нажми '+' и я пришлю статистику за день")
+        schedule1.clear(chatId)
+        schedule2.clear(chatId)
         return schedule.CancelJob
     return send_function
 
